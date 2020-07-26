@@ -23,6 +23,15 @@ myLast' :: [a] -> a
 myLast' [] = error emptyListError
 myLast' x = x !! (length x -1) 
 
+myLast'' :: [a] -> a
+myLast'' = foldl1 (\_ x -> x )
+
+myLast''' :: [a] -> a
+myLast''' = foldr1 (\_ acc -> acc )
+
+myLastEl :: [a] -> a
+myLastEl xs = fst . (!! 0) . dropWhile (\(a,b) -> b<(length xs)) . zip xs $ [1..]
+
 
 {-- Problem 2 Find the last but one element of a list.
 --- myButLast [1,2,3,4]
@@ -40,6 +49,7 @@ myButLast' [] = error emptyListError
 myButLast' [_] = error notEnoughelementsError
 myButLast' x = x !! (length x -2) 
 
+
 {-- Problem 3  Find the K'th element of a list. 
 --- elementAt [1,2,3] 2
 --- 2
@@ -52,6 +62,21 @@ elementAt (x:xs) n
     | n==1 = x
     | otherwise = elementAt xs (n-1)
 
+zipp3 :: [a] -> [b] -> [c] -> [(a,b,c)]
+zipp3 [] _ _ = []
+zipp3 _ [] _ = []
+zipp3 _ _ [] = []
+zipp3 (x:xs) (y:ys) (z:zs) = (x, y, z) : zipp3 xs ys zs
+
+elementAt' :: [a] -> Int -> a
+elementAt' xs n = foldl (\acc (n, (a, b)) -> if (b > n) then acc else a ) (head xs) l
+    where l = zip (replicate (length xs) n ) . zip xs $ [1..(length xs)]
+
+elementAt'' :: [a] -> Int -> a
+elementAt'' xs n = foldl (\acc (n, a, b) -> if (b > n) then acc else a ) (head xs) l
+    where l = zipp3 (replicate (length xs) n )  xs  [1..(length xs)]
+
+
 {-- Problem 4  Find the number of elements of a list.
 --- myLength [123, 456, 789]
 --- 3
@@ -62,6 +87,8 @@ myLength [] = 0
 myLength [_] = 1
 myLength (_:xs) = 1 + myLength xs
 
+myLength' xs = foldl (\acc x -> acc) 0 xs
+
 {-- Problem 5  Reverse a list.
 --- myReverse [1,2,3,4]
 --- [4,3,2,1]
@@ -71,6 +98,11 @@ myReverse :: [a] -> [a]
 myReverse [] = []
 myReverse [x] = [x]
 myReverse (x:xs) = myReverse xs ++ [x]
+
+myReverse' :: (Num a) => [a] -> [a]
+myReverse' xs = foldl (\acc x -> x:acc) [] xs
+
+
 
 {-- Problem 6  Find out whether a list is a palindrome. 
 --- A palindrome can be read forward or backward; e.g. (x a m a x).
