@@ -1,0 +1,22 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.33.0.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: 04dba59402994c9af7e710a5343b7b5008699707b3dd10632141f772d55112f6
+
+name:           warmup
+version:        0.0.0
+build-type:     Simple
+
+library
+  exposed-modules:
+      Warmup
+  other-modules:
+      Paths_warmup
+  hs-source-dirs:
+      src
+  build-depends:
+      base
+  default-language: Haskell2010
