@@ -28,7 +28,7 @@ tests = [test1, test2, test3, testA1, testA2, testA3,
   testA1 = ("testA1", showExp (Cst (-2)) == "(-2)")
   testA2 = ("testA2", showExp (Cst (2)) == "2")
   testA3 = ("testA3", showExp (Mul (Cst (-2)) (Add (Cst 2) (Cst 4))) == "((-2)*(2+4))")
-  --testA4 = ("testA4", showExp (Var "x") == "Error : Not a valid expression.")
+  -- testA4 = ("testA4", showExp (Var "x") == "Error : Not a valid expression.")
   
   --evalSimple
   testB1 = ("testB1", evalSimple (Cst (-2)) == (-2))

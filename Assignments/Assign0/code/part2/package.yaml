@@ -26,4 +26,5 @@ tests:
     dependencies:
       - arithmetic
       - tasty     # The Test.Tasty framework, if you want to use it
-      # You may add other LTS-14.1 packages here, if really appropriate
+      - tasty-hunit
+      # you may add other packages here, if really needed

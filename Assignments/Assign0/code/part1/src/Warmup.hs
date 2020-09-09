@@ -9,14 +9,12 @@ move West  (x,y) = (x-1, y)
 move East  (x,y) = (x+1, y)
 move South (x,y) = (x, y-1)
 -- move _ (x,y) = (x, y)
--- complete the definition
+
 
 moves :: [Direction] -> Pos -> Pos
 moves [] pos = pos
 moves (d:ds) pos = moves ds . move d $ pos 
 
--- replace with actual definition of moves, and likewise for the
--- other 'undefined' functions
 
 data Nat = Zero | Succ Nat
   deriving (Eq, Show, Read, Ord)
@@ -33,7 +31,7 @@ mult (Succ Zero) x = x
 mult x (Succ Zero) = x
 mult x (Succ y) = add x . mult x $ y
 
--- Do not use these to define add/mult!
+
 nat2int :: Nat -> Int
 nat2int Zero = 0
 nat2int (Succ x) = 1 + nat2int x
@@ -54,3 +52,4 @@ insert n t@(Node k left right)
   | n==k = t
   | n<k = Node k (insert n left) right
   | otherwise = Node k left (insert n right)
+
