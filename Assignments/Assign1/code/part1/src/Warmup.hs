@@ -13,8 +13,10 @@ newtype RWSP a = RWSP {runRWSP :: ReadData -> StateData ->
 
 -- complete the definitions
 instance Monad RWSP where
-  return a = undefined
-  m >>= f = undefined
+  return a = RWSP (\r s -> (a, mempty, s))
+  m >>= f = RWSP (\r0 s0 -> let (a, w0, sd0) = runRWSP m r0 s0
+                                (b, w1, sd1) = runRWSP (f a) r0 sd0
+                                 in (b, w0++w1, sd1))
 
 -- No need to touch these
 instance Functor RWSP where
@@ -28,19 +30,19 @@ askP = RWSP (\r s -> (r, mempty, s))  -- freebie
 
 -- runs computation with new read data
 withP :: ReadData -> RWSP a -> RWSP a
-withP r' m = undefined
+withP r' m =RWSP (\r0 s0 -> runRWSP m r' s0)
 
 -- adds some write data to accumulator
 tellP :: WriteData -> RWSP ()
-tellP w = undefined
+tellP w = RWSP (\r s -> ((), w, s))
 
 -- returns current state data
 getP :: RWSP StateData
-getP = undefined
+getP = RWSP (\r s -> (s, mempty, s))
 
 -- overwrites the state data
 putP :: StateData -> RWSP ()
-putP s' = undefined
+putP s' =  RWSP (\r s -> ((), mempty, s'))
 
 -- sample computation using all features
 type Answer = String
@@ -68,8 +70,8 @@ newtype RWSE a = RWSE {runRWSE :: ReadData -> StateData ->
 
 -- Hint: here you may want to exploit that "Either ErrorData" is itself a monad
 instance Monad RWSE where
-  return a = undefined
-  m >>= f = undefined
+  return a = undefined --RWSE (\r s -> Right (a, mempty, s))
+  m >>= f = undefined --RWSE (\r0 s0 -> do (Right (a, w0, sd0)) <- runRWSE m r0 s0; (Right (b, w1, sd1)) <- runRWSE (f a) r0 sd0; return (Right (b, w0++w1, sd1)))
 
 instance Functor RWSE where
   fmap = liftM
@@ -77,22 +79,22 @@ instance Applicative RWSE where
   pure = return; (<*>) = ap
 
 askE :: RWSE ReadData
-askE = undefined
+askE = RWSE (\r s -> Right (r, mempty, s))
 
 withE :: ReadData -> RWSE a -> RWSE a
-withE r' m = undefined
+withE r' m = RWSE (\r0 s0 -> runRWSE m r' s0)
 
 tellE :: WriteData -> RWSE ()
-tellE w = undefined
+tellE w = RWSE (\r s -> Right ((), w, s))
 
 getE :: RWSE StateData
-getE = undefined
+getE = RWSE (\r s -> Right (s, mempty, s))
 
 putE :: StateData -> RWSE ()
-putE s' = undefined
+putE s' = RWSE (\r s -> Right ((), mempty, s'))
 
 throwE :: ErrorData -> RWSE a
-throwE e = undefined
+throwE e = RWSE (\r s -> Left e)
 
 sampleE :: RWSE Answer
 sampleE =
