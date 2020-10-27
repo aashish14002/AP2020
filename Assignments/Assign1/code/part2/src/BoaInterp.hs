@@ -63,6 +63,32 @@ safeComparisonOp x y f = case (x, y) of
                       (IntVal a, IntVal b) -> if (f a b) then (Right TrueVal) else (Right FalseVal)
                       _ -> Left "EBadArg"
 
+rangeBoa :: Int -> Int -> Int -> Value
+rangeBoa n1 n2 n3
+  | (n1>=n2 && n3>0) || (n1<=n2 && n3<0) = ListVal mempty
+  | n3<0 = ListVal (fmap (\x -> IntVal x) [n1, n1+n3 .. n2+1])
+  | otherwise = ListVal (fmap (\x -> IntVal x) [n1, n1+n3 .. n2-1])
+
+listToString :: [String] -> String
+listToString [] = ""
+listToString [x] = x
+listToString (x:xs) = x ++ ", " ++ listToString xs
+
+parseBoaValue :: Value -> String
+parseBoaValue val = case val of
+                      NoneVal -> "None"
+                      TrueVal -> "True"
+                      FalseVal -> "False"
+                      IntVal a -> show a
+                      StringVal a -> a
+                      ListVal [] -> "[]"
+                      ListVal xs -> "[" ++ listToString (fmap (parseBoaValue) xs) ++ "]"
+
+toOneMonad :: [Comp a] -> Comp [a]
+toOneMonad [] = return []
+toOneMonad (x:xs) = do a <- x; b <- (fff xs); return (a:b) 
+
+
 truthy :: Value -> Bool
 truthy val
   | val==NoneVal || val==(IntVal 0) || val==(FalseVal) || val==StringVal "" || val==ListVal [] = False
@@ -72,7 +98,9 @@ operate :: Op -> Value -> Value -> Either String Value
 operate Plus x y = safeArithmeticOp x y (+)
 operate Minus x y = safeArithmeticOp x y (-)
 operate Times x y = safeArithmeticOp x y (*)
-operate Mod x y = safeArithmeticOp x y (mod)
+operate Mod x y 
+  | y==(IntVal 0) = Left "Div by Zero"
+  | otherwise = safeArithmeticOp x y (mod)
 operate Div x y
   | y==(IntVal 0) = Left "Div by Zero"
   | otherwise = safeArithmeticOp x y (div)
@@ -85,14 +113,47 @@ operate In a s = case s of
                   _ -> Left "EBadArg"
 
 apply :: FName -> [Value] -> Comp Value
-apply = undefined
+apply "range" argL = case argL of
+                [IntVal n1, IntVal n2, IntVal n3] -> return (rangeBoa n1 n2 n3 )
+                [IntVal n1, IntVal n2] -> return (rangeBoa n1 n2 1 )
+                [IntVal n2] -> return (rangeBoa 0 n2 1 )
+                _ -> abort (EBadArg "Inavalid arguments in range function")
+apply "print" argL = case argL of
+                [] -> do output (""); return NoneVal --Comp (\e -> (Right NoneVal, [""] ))
+                _ ->  do output (foldl1 (\x y -> x ++ " " ++ y ) (fmap (parseBoaValue) argL )); return NoneVal          --in (Right NoneVal, [out] ))
+apply fname _= abort (EBadFun fname)
 
 -- Main functions of interpreter
 eval :: Exp -> Comp Value
-eval = undefined
+eval (Const val) = return val
+eval (Var vName) = look vName
+eval (Oper op x y) = do a <- eval x
+                        b <- eval y
+                        case operate op a b of
+                          Left er -> abort (EBadArg er)
+                          Right val -> return val
+eval (Not x) = do a <- eval x
+                  case truthy a of
+                    True -> return FalseVal
+                    False -> return TrueVal
+eval (Call fname expL) = undefined
+eval (Call fname expL) = let ad= (fmap (eval) expL)
+                          in do agL <- (toOneMonad ad); apply fname agL
+eval (List expL) = let ad= (fmap (eval) expL)
+                      in do agL <- (toOneMonad ad); return (ListVal agL)
+eval (Compr x ccl) = undefined
+
+
+
+
 
 exec :: Program -> Comp ()
-exec = undefined
+exec [] = return ()
+exec (x:xs) = case x of
+                SDef vName exp -> do v <- eval exp; withBinding vName v (eval exp); exec xs
+                SExp exp ->  do eval exp; exec xs
 
 execute :: Program -> ([String], Maybe RunError)
-execute = undefined
+execute program = case  runComp (exec program) [] of
+                    (Left er, out) -> (out, Just er)
+                    (_, out) -> (out, Nothing)
