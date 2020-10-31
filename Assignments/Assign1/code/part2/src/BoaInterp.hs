@@ -18,7 +18,7 @@ data RunError = EBadVar VName | EBadFun FName | EBadArg String
 newtype Comp a = Comp {runComp :: Env -> (Either RunError a, [String]) }
 
 instance Monad Comp where
-  return a = Comp (\e -> (Right a, mempty))
+  return a = Comp (\_ -> (Right a, mempty))
   m >>= f = Comp (\e -> case runComp m e of
                           (Left er, xs) -> (Left er, xs)
                           (Right a, xs) -> case runComp (f a) e of
@@ -33,18 +33,18 @@ instance Applicative Comp where
 
 -- Operations of the monad
 abort :: RunError -> Comp a
-abort re = Comp (\e -> (Left re, mempty))
+abort re = Comp (\_ -> (Left re, mempty))
 
 look :: VName -> Comp Value
 look v = Comp (\e -> case isMemberE v e of
                       Nothing -> (Left (EBadVar v), mempty)
-                      Just (v, val) -> (Right val, mempty))
+                      Just (_, val) -> (Right val, mempty))
 
 withBinding :: VName -> Value -> Comp a -> Comp a
 withBinding v val m = Comp (\e -> runComp m ((v,val):e))
 
 output :: String -> Comp ()
-output s = Comp (\e -> (Right (), [s]))
+output s = Comp (\_ -> (Right (), [s]))
 
 -- Helper functions for interpreter
 
@@ -86,8 +86,7 @@ parseBoaValue val = case val of
 
 toOneMonad :: [Comp a] -> Comp [a]
 toOneMonad [] = return []
-toOneMonad (x:xs) = do a <- x; b <- (fff xs); return (a:b) 
-
+toOneMonad (x:xs) = do a <- x; b <- (toOneMonad xs); return (a:b) 
 
 truthy :: Value -> Bool
 truthy val
@@ -119,7 +118,7 @@ apply "range" argL = case argL of
                 [IntVal n2] -> return (rangeBoa 0 n2 1 )
                 _ -> abort (EBadArg "Inavalid arguments in range function")
 apply "print" argL = case argL of
-                [] -> do output (""); return NoneVal --Comp (\e -> (Right NoneVal, [""] ))
+                [] -> do output (""); return NoneVal
                 _ ->  do output (foldl1 (\x y -> x ++ " " ++ y ) (fmap (parseBoaValue) argL )); return NoneVal          --in (Right NoneVal, [out] ))
 apply fname _= abort (EBadFun fname)
 
@@ -136,12 +135,11 @@ eval (Not x) = do a <- eval x
                   case truthy a of
                     True -> return FalseVal
                     False -> return TrueVal
-eval (Call fname expL) = undefined
 eval (Call fname expL) = let ad= (fmap (eval) expL)
                           in do agL <- (toOneMonad ad); apply fname agL
 eval (List expL) = let ad= (fmap (eval) expL)
                       in do agL <- (toOneMonad ad); return (ListVal agL)
-eval (Compr x ccl) = undefined
+eval (Compr _ _) = undefined
 
 
 
@@ -150,8 +148,9 @@ eval (Compr x ccl) = undefined
 exec :: Program -> Comp ()
 exec [] = return ()
 exec (x:xs) = case x of
-                SDef vName exp -> do v <- eval exp; withBinding vName v (eval exp); exec xs
+                SDef vName exp -> do v <- eval exp; withBinding vName v (exec xs)
                 SExp exp ->  do eval exp; exec xs
+
 
 execute :: Program -> ([String], Maybe RunError)
 execute program = case  runComp (exec program) [] of
