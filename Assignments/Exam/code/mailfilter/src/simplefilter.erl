@@ -1,5 +1,5 @@
 -module(simplefilter).
--export([try_it/0,oneway/1]).
+-export([try_it/0,oneway/1,another/1,oneway1/1,another1/1,inProgress/1]).
 importance(M, C) ->
   Important = binary:compile_pattern([<<"AP">>, <<"Haskell">>, <<"Erlang">>]),
   case binary:match(M, Important, []) of
@@ -8,6 +8,25 @@ importance(M, C) ->
 
 importance2(M, C) ->
   {transformed, <<"FOrget it">>}.
+
+importance3(M, C) ->
+  Important = binary:compile_pattern([<<"it">>]),
+  case binary:match(M, Important, []) of
+    nomatch -> {just, C#{spamit => true}};
+    _ -> {just, C#{importance3 => 10000}} end.
+
+inProgress(P) ->
+  case P of
+    inprogress -> true;
+    _ -> false
+  end.
+
+mergeFun(F) ->
+    case lists:any(fun inProgress/1,F) of
+      true -> continue;
+      _  -> io:fwrite("MERGE FUNCTION : ~p ~n" , [F]),lists:last(F)
+    end.
+  
 
 oneway1(Mail) ->
   {ok, MS} = mailfilter:start(infinite),
@@ -33,7 +52,9 @@ another1(Mail) ->
   {ok, [{M, Config}]} = mailfilter:stop(MS),
   io:fwrite("Config: ~s~n" , [M]),
   Res = [ Result || {Label, Result} <- Config],
-  {M, lists:nth(1, Res)}.
+  {M, Res}.
+
+
 
   oneway(Mail) ->
     {ok, MS} = mailfilter:start(infinite),
@@ -50,10 +71,15 @@ another1(Mail) ->
     mailfilter:add_filter(MR, "importance", {simple, fun importance/2}, #{}),
     mailfilter:add_filter(MR, ap_r0cks, {simple, fun(<<M:24/binary, _>>) ->
                                                      {transform, M} end}, flap),
-    timer:sleep(50), % Might not be needed
-    {ok, [{M, Config}]} = mailfilter:stop(MS),
-    [Res] = [ Result || {Label, Result} <- Config, Label == "importance"],
-    {M, Res}.
+    mailfilter:add_filter(MR, ap_r0cks1, {group,[{chain,[{simple, fun importance2/2},{simple, fun importance/2}] },{simple, fun importance3/2}],fun mergeFun/1 }, #{}),
+    mailfilter:add_filter(MR, ap_r0cks2, {group,[{group,[{simple, fun importance2/2},{simple, fun importance/2}],fun mergeFun/1 },{simple, fun importance2/2},{simple, fun importance/2}],fun mergeFun/1 }, #{}),
+
+    timer:sleep(2000), % Might not be needed
+    A =  mailfilter:stop(MS),
+    % {ok, [{M, Config}]} = mailfilter:stop(MS),
+    % [Res] = [ Result || {Label, Result} <- Config, Label == "importance"],
+    A.
+    %%{M, Res}.
   
   try_it() ->
     Mail = <<"Remember to read AP exam text carefully">>,

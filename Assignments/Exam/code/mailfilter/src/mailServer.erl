@@ -44,6 +44,12 @@ handle_cast({default, Label, Filt, Data}, #{filters := Filters}=State) ->
                     {chain, _} -> UpdatedFilters = Filters#{Label => {Filt, Data}},
                                 UpdatedState = State#{filters := UpdatedFilters},
                                 {noreply, UpdatedState};
+                    {group, _, _} -> UpdatedFilters = Filters#{Label => {Filt, Data}},
+                                UpdatedState = State#{filters := UpdatedFilters},
+                                {noreply, UpdatedState};
+                    {timelimit, _, _} -> UpdatedFilters = Filters#{Label => {Filt, Data}},
+                                UpdatedState = State#{filters := UpdatedFilters},
+                                {noreply, UpdatedState};
                     _ ->  io:format("code_change MAILSERVER_DEFAULT_NONE: ~p~n", [State]),
                         {noreply, State}
                 end;

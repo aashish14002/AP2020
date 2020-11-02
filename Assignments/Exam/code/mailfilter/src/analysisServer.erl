@@ -24,7 +24,7 @@ stopAllFilters(FilterServers) ->
     lists:foreach(fun stopFilter/1, FilterServers).
 
 startFilters(Mail, FilterD) ->
-    TempFilters = [filterServer:start([L, element(1, maps:get(L,FilterD)), Mail, element(2, maps:get(L,FilterD)), self()]) || L <- maps:keys(FilterD)],
+    TempFilters = [filterServer:start([L, element(1, maps:get(L,FilterD)), Mail, element(2, maps:get(L,FilterD)), none, self()]) || L <- maps:keys(FilterD)],
     FilterServers = [ F || {ok, F} <- TempFilters],
     lists:foreach(fun runFilter/1, FilterServers),
     FilterServers.
@@ -45,7 +45,6 @@ handle_call(stop_filters, _, #{mail := Mail, filterData := FilterD, filterServer
 
 handle_call(get_config, _, #{filterData := FilterD, filterResults := FilterResults}=State) ->
     Result = [ {L, maps:get(L, FilterResults, inprogress)}|| L <- maps:keys(FilterD)],
-    io:format("code_change ANALYSIS CONFIG ~p~n", [State]),
     {reply, {ok, Result}, State}.
 
 handle_cast({add_filter, Label, Filt, Data}, #{mail := Mail, filterServers := FilterServers, filterData := FilterD}=State) ->
@@ -60,6 +59,13 @@ handle_cast({add_filter, Label, Filt, Data}, #{mail := Mail, filterServers := Fi
                                 runFilter(FS),
                                 UpdatedFilters = FilterD#{Label => {Filt, Data}},
                                 UpdatedState = State#{filterData := UpdatedFilters, filterServers := [FS|FilterServers]},
+                                            {noreply, UpdatedState};
+                    {group, _, _} -> [FS] = startFilters(Mail, #{Label => {Filt, Data}}),
+                                
+                                runFilter(FS),
+                                UpdatedFilters = FilterD#{Label => {Filt, Data}},
+                                UpdatedState = State#{filterData := UpdatedFilters, filterServers := [FS|FilterServers]},
+                                io:format("code_change ANALYSIS Add_FILTER_GROUP: ~p~n", [State]),
                                 {noreply, UpdatedState};
                     _ ->  io:format("code_change ANALYSIS Add_FILTER_NONE: ~p~n", [State]),
                         {noreply, State}
@@ -70,7 +76,7 @@ handle_cast({add_filter, Label, Filt, Data}, #{mail := Mail, filterServers := Fi
     end;
 
 handle_cast({_, Label, just, UData}, #{filterResults := FilterResults}=State) ->
-    io:format("code_change ANALYSIS JUST DATA: ~p~n", [State#{filterResults => FilterResults#{Label => {done, UData} }}]),
+    % io:format("code_change ANALYSIS JUST DATA: ~p~n", [State#{filterResults => FilterResults#{Label => {done, UData} }}]),
     {noreply, State#{filterResults => FilterResults#{Label => {done, UData} }}};
 
 handle_cast({F, Label, transformed, UMail}, #{filterData := FilterD, filterServers := FilterServers}=State) ->
@@ -78,7 +84,7 @@ handle_cast({F, Label, transformed, UMail}, #{filterData := FilterD, filterServe
     stopAllFilters(lists:delete(F, FilterServers)),
     UpdatedServers = startFilters(UMail, maps:remove(Label, FilterD)),
     UpdatedState = State#{ mail => UMail, filterServers => [F|UpdatedServers], filterResults => #{Label => {done, Data}}},
-    io:format("code_change ANALYSIS TRANSFORMED: ~p~n", [UpdatedState]),
+    % io:format("code_change ANALYSIS TRANSFORMED: ~p~n", [UpdatedState]),
     {noreply, UpdatedState};
 
 handle_cast({_, Label, unchanged}, #{filterData := FilterD, filterResults := FilterResults}=State) ->

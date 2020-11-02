@@ -8,6 +8,20 @@
 start(FilterData) ->
     gen_server:start(?MODULE, FilterData, []).
 
+runNewFilter(F) ->
+    gen_server:cast(F, run_filter).
+
+stopNewFilter(F) -> 
+    gen_server:cast(F, stop).
+
+stopAllFilters(FilterServers) ->
+    lists:foreach(fun stopNewFilter/1, FilterServers).
+
+startNewFilters(M, D, L, MrgF, FiltL) ->
+    TempFilters = [filterServer:start([L, Filt, M, D, MrgF, self()]) || Filt <- FiltL],
+    FilterServers = [ F || {ok, F} <- TempFilters],
+    lists:foreach(fun runNewFilter/1, FilterServers),
+    FilterServers.
 
 runFilterFun(FilterFun, Label, Mail, Data) ->
 try FilterFun(Mail, Data) of
@@ -16,12 +30,21 @@ catch
     _:_ -> {Label, unchanged}
 end.
 
+applyMerge(Label, AS, MergeFun, FunResults) ->
+    case MergeFun(FunResults) of 
+        {just, UData} -> gen_server:cast(AS,{self(), Label, just, UData});
+        {transformed, UMail} -> gen_server:cast(AS, {self(), Label, transformed, UMail});
+        unchanged -> gen_server:cast(AS, {self(), Label, unchanged});
+        {both, UMail, UData} -> gen_server:cast(AS, {self(), Label, both, UMail, UData});
+        continue -> none;
+        _ -> none
+    end.
+
 init(FilterData) ->
     
-    %% FilterFun = {simple, filter_fun()} | {chain, [{simple, filter_fun()}]}
-   
-    [Label, FilterFun, Mail, Data, AS] = FilterData,
-    {ok, #{label => Label, mail => Mail, data => Data, filter => FilterFun, as => AS}}.
+    %% FilterFun = {simple, filter_fun()} | {chain, [FilterFun]} | {group, [FilterFun], mergeFun}
+    [Label, FilterFun, Mail, Data, MrgFun, AS] = FilterData, 
+    {ok, #{label => Label, mail => Mail, data => Data, filter => FilterFun, as => AS, mergeFun => MrgFun, groupFilterServers => [], groupResults => #{}}}.
 
 
 
@@ -29,7 +52,18 @@ handle_call(get_filter, _, #{label := Label, mail := Mail, data := Data, filter 
     case Filter of
         {simple, FilterFun} -> Result = runFilterFun(FilterFun, Label, Mail, Data),
                                {reply, Result, State};
-        _ -> {reply, {Label, unchanged}, State}
+        {chain, FilterFunList} -> Result = case lists:foldl(fun chainingHelper/2, {unchanged, Mail, Data, Label},FilterFunList) of
+                                                {just, _, UData, _} -> {Label, {just, UData}};
+                                                {transformed, UMail, _, _} -> {Label, {transformed, UMail}};
+                                                {unchanged, _, _, _} -> {Label, unchanged};
+                                                {both, UMail, UData, _} -> {Label, {both, UMail, UData}};
+                                                _  -> io:format("FILTERFUN CALL NOT MATCH  ~p~n", [State]),{Label, unchanged}
+                                            end,
+                                            io:format("code_change GET_FILTER OLD STATE  ~p~n", [State]),
+                                            io:format("code_change GET FILTER NEW STATE > MAIL > DATA > LABEL > FUNC - ~p >>>>> ~p~n", [FilterFunList, Result ]), 
+                                {reply, Result, State};
+        _                   -> {reply, {Label, unchanged}, State}
+        
                                 
         % {chain, FilterFunList} -> try FilterFun(Mail, Data) of
         %                         {just, UData} -> gen_server:call(AS,{self(), Label, just, UData});
@@ -56,7 +90,8 @@ updatedFilterState(Old, New) ->
     end.
 
 chainingHelper(Filt, {S, Mail, Data, Label}) ->
-    {ok, FSC} = start([Label, Filt, Mail, Data, self()]),
+    {ok, FSC} = start([Label, Filt, Mail, Data, none, self()]),
+    
     Res = case gen_server:call(FSC, get_filter) of
             {L, {just, UData}} -> {updatedFilterState(S, just), Mail, UData, L};
             {L, {transformed, UMail}} -> {updatedFilterState(S, transformed), UMail, Data, L};
@@ -64,6 +99,8 @@ chainingHelper(Filt, {S, Mail, Data, Label}) ->
             {L, {both, UMail, UData}} -> {updatedFilterState(S, both), UMail, UData, L}
         end,
     gen_server:cast(FSC, stop),
+    io:format("code_change CHAINING HELPER OLD STATE  > MAIL > DATA > LABEL~p~n", [{Filt, S, Mail, Data, Label}]),
+    io:format("code_change CHAINING HELPER NEW STATE > MAIL > DATA > LABEL > FUNC - ~p >>>>> ~p~n", [Filt, Res ]),
     Res.
     
 
@@ -77,46 +114,55 @@ handle_cast(run_filter, #{label := Label, mail := Mail, data := Data, filter := 
                                     {both, UMail, UData} -> gen_server:cast(AS, {self(), Label, both, UMail, UData})
                                 catch
                                     _:_ -> gen_server:cast(AS, {self(), Label, unchanged})
-                                end;
+                                end,
+                                io:format("code_change RUN MERGE INNER FUNCTION: ~p ~n", [State]),
+                                      
+                                {noreply, State};
         {chain, FilterFunList} -> case lists:foldl(fun chainingHelper/2, {unchanged, Mail, Data, Label},FilterFunList) of
                                     {just, _, UData, _} -> gen_server:cast(AS,{self(), Label, just, UData});
                                     {transformed, UMail, _, _} -> gen_server:cast(AS, {self(), Label, transformed, UMail});
                                     {unchanged, _, _, _} -> gen_server:cast(AS, {self(), Label, unchanged});
                                     {both, UMail, UData, _} -> gen_server:cast(AS, {self(), Label, both, UMail, UData})
-                            end
-            
-        % try FilterFun(Mail, Data) of
-        %                         {just, UData} -> gen_server:cast(AS,{self(), Label, just, UData});
-        %                         {transformed, UMail} -> gen_server:cast(AS, {self(), Label, transformed, UMail});
-        %                         unchanged -> gen_server:cast(AS, {self(), Label, unchanged});
-        %                         {both, UMail, UData} -> gen_server:cast(AS, {self(), Label, both, UMail, UData})
-        %                     catch
-        %                         _:_ -> gen_server:cast(AS, {self(), Label, unchanged})
-        %                     end        
-    end,
-    {noreply, State};
+                                end,
+                                {noreply, State};
+        {group, FilterFunList, MergeFun} -> MFS = startNewFilters(Mail, Data, Label, none, FilterFunList),
+                                    io:format("code_change RUN MERGE FILTER MAIN: ~p~n", [State#{mergeFun := MergeFun, groupFilterServers := MFS}]),
+                                        {noreply, State#{mergeFun := MergeFun, groupFilterServers := MFS}};
+        {timelimit, TimeOut, FilterFun} -> {noreply, State};
+        _                           ->  {noreply, State}
+   
+    end;
 
-handle_cast({_, Label, just, UData}, #{filterResults := FilterResults}=State) ->
-    {noreply, State#{filterResults => FilterResults#{Label => {done, UData} }}};
 
-% handle_cast({F, Label, transformed, UMail}, #{filterData := FilterD, filterServers := FilterServers}=State) ->
-%     #{Label := {_, Data}}=FilterD,
-%     stopAllFilters(lists:delete(F, FilterServers)),
-%     UpdatedServers = startFilters(UMail, maps:remove(Label, FilterD)),
-%     UpdatedState = State#{ mail => UMail, filterServers => UpdatedServers, filterresults => #{Label => {done, Data}}},
-%     {noreply, UpdatedState};
 
-% handle_cast({_, Label, unchanged}, #{filterData := FilterD, filterResults := FilterResults}=State) ->
-%     #{Label := {_, Data}}=FilterD,
-%     {noreply, State#{filterResults => FilterResults#{Label => {done, Data} }}};
+handle_cast({MF, Label, just, UData}, #{groupResults := GroupResults, mergeFun := MergeFun, groupFilterServers := GroupFilterServers, as := AS}=State) ->
+    UpdatedGroupResults = GroupResults#{MF => {just, UData}},
+    io:format("code_change HANDLE INNER MERGE RESULTS: ~p~n", [State#{groupResults => UpdatedGroupResults }]),
+                                     
+    Result = [ maps:get(F, UpdatedGroupResults, inprogress)|| F <- GroupFilterServers],
+    applyMerge(Label, AS, MergeFun, Result),
+    {noreply, State#{groupResults => UpdatedGroupResults }};
 
-% handle_cast({F, Label, both, UMail, UData}, #{filterData := FilterD, filterServers := FilterServers}=State) ->
-%     stopAllFilters(lists:delete(F, FilterServers)),
-%     UpdatedServers = startFilters(UMail, maps:remove(Label, FilterD)),
-%     UpdatedState = State#{ mail => UMail, filterServers => UpdatedServers, filterresults => #{Label => {done, UData}}},
-%     {noreply, UpdatedState};
+handle_cast({MF, Label, transformed, UMail}, #{groupResults := GroupResults, mergeFun := MergeFun, groupFilterServers := GroupFilterServers, as := AS}=State) ->
+    UpdatedGroupResults = GroupResults#{MF => {transformed, UMail}},
+    Result = [ maps:get(F, UpdatedGroupResults, inprogress)|| F <- GroupFilterServers],
+    applyMerge(Label, AS, MergeFun, Result),
+    {noreply, State#{groupResults => UpdatedGroupResults }};
 
-handle_cast(stop, State) ->
+handle_cast({MF, Label, unchanged}, #{groupResults := GroupResults, mergeFun := MergeFun, groupFilterServers := GroupFilterServers, as := AS}=State) ->
+    UpdatedGroupResults = GroupResults#{MF => unchanged},
+    Result = [ maps:get(F, UpdatedGroupResults, inprogress)|| F <- GroupFilterServers],
+    applyMerge(Label, AS, MergeFun, Result),
+    {noreply, State#{groupResults => UpdatedGroupResults }};
+
+handle_cast({MF, Label, both, UMail, UData}, #{groupResults := GroupResults, mergeFun := MergeFun, groupFilterServers := GroupFilterServers, as := AS}=State) ->
+    UpdatedGroupResults = GroupResults#{MF => {both, UMail, UData}},
+    Result = [ maps:get(F, UpdatedGroupResults, inprogress)|| F <- GroupFilterServers],
+    applyMerge(Label, AS, MergeFun, Result),
+    {noreply, State#{groupResults => UpdatedGroupResults }};
+
+handle_cast(stop, #{groupFilterServers := GroupFilterServers}=State) ->
+    stopAllFilters(GroupFilterServers),
     {stop, normal, State}.
 
 handle_info(Info, State) ->
