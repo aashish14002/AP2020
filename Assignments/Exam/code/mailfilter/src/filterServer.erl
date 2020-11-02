@@ -3,20 +3,72 @@
 
 -export([start/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
+-export([runFilterFun/4, chainingHelper/2, updatedFilterState/2]).
 
 start(FilterData) ->
     gen_server:start(?MODULE, FilterData, []).
 
 
+runFilterFun(FilterFun, Label, Mail, Data) ->
+try FilterFun(Mail, Data) of
+    Result -> {Label, Result}
+catch
+    _:_ -> {Label, unchanged}
+end.
 
 init(FilterData) ->
+    
+    %% FilterFun = {simple, filter_fun()} | {chain, [{simple, filter_fun()}]}
+   
     [Label, FilterFun, Mail, Data, AS] = FilterData,
     {ok, #{label => Label, mail => Mail, data => Data, filter => FilterFun, as => AS}}.
 
+
+
+handle_call(get_filter, _, #{label := Label, mail := Mail, data := Data, filter := Filter}=State) ->
+    case Filter of
+        {simple, FilterFun} -> Result = runFilterFun(FilterFun, Label, Mail, Data),
+                               {reply, Result, State};
+        _ -> {reply, {Label, unchanged}, State}
+                                
+        % {chain, FilterFunList} -> try FilterFun(Mail, Data) of
+        %                         {just, UData} -> gen_server:call(AS,{self(), Label, just, UData});
+        %                         {transformed, UMail} -> gen_server:call(AS, {self(), Label, transformed, UMail});
+        %                         unchanged -> gen_server:call(AS, {self(), Label, unchanged});
+        %                         {both, UMail, UData} -> gen_server:call(AS, {self(), Label, both, UMail, UData})
+        %                     catch
+        %                         _:_ -> gen_server:call(AS, {self(), Label, unchanged})
+        %                     end        
+    end;
+    
 handle_call(_, _, State) ->
     {ok, State}.
 
-handle_cast(runSimple, #{label := Label, mail := Mail, data := Data, filter := Filter, as := AS}=State) ->
+updatedFilterState(Old, New) ->
+    case {Old, New} of
+        {S, unchanged} -> S;
+        {unchanged, S} -> S;
+        {_, both} -> both;
+        {both, _} -> both;
+        {S, S} -> S;
+        {just, transformed} -> both;
+        {transformed, just} -> both
+    end.
+
+chainingHelper(Filt, {S, Mail, Data, Label}) ->
+    {ok, FSC} = start([Label, Filt, Mail, Data, self()]),
+    Res = case gen_server:call(FSC, get_filter) of
+            {L, {just, UData}} -> {updatedFilterState(S, just), Mail, UData, L};
+            {L, {transformed, UMail}} -> {updatedFilterState(S, transformed), UMail, Data, L};
+            {L, unchanged} -> {updatedFilterState(S, unchanged), Mail, Data, L};
+            {L, {both, UMail, UData}} -> {updatedFilterState(S, both), UMail, UData, L}
+        end,
+    gen_server:cast(FSC, stop),
+    Res.
+    
+
+
+handle_cast(run_filter, #{label := Label, mail := Mail, data := Data, filter := Filter, as := AS}=State) ->
     case Filter of
         {simple, FilterFun} -> try FilterFun(Mail, Data) of
                                     {just, UData} -> gen_server:cast(AS,{self(), Label, just, UData});
@@ -25,7 +77,22 @@ handle_cast(runSimple, #{label := Label, mail := Mail, data := Data, filter := F
                                     {both, UMail, UData} -> gen_server:cast(AS, {self(), Label, both, UMail, UData})
                                 catch
                                     _:_ -> gen_server:cast(AS, {self(), Label, unchanged})
-                                end
+                                end;
+        {chain, FilterFunList} -> case lists:foldl(fun chainingHelper/2, {unchanged, Mail, Data, Label},FilterFunList) of
+                                    {just, _, UData, _} -> gen_server:cast(AS,{self(), Label, just, UData});
+                                    {transformed, UMail, _, _} -> gen_server:cast(AS, {self(), Label, transformed, UMail});
+                                    {unchanged, _, _, _} -> gen_server:cast(AS, {self(), Label, unchanged});
+                                    {both, UMail, UData, _} -> gen_server:cast(AS, {self(), Label, both, UMail, UData})
+                            end
+            
+        % try FilterFun(Mail, Data) of
+        %                         {just, UData} -> gen_server:cast(AS,{self(), Label, just, UData});
+        %                         {transformed, UMail} -> gen_server:cast(AS, {self(), Label, transformed, UMail});
+        %                         unchanged -> gen_server:cast(AS, {self(), Label, unchanged});
+        %                         {both, UMail, UData} -> gen_server:cast(AS, {self(), Label, both, UMail, UData})
+        %                     catch
+        %                         _:_ -> gen_server:cast(AS, {self(), Label, unchanged})
+        %                     end        
     end,
     {noreply, State};
 

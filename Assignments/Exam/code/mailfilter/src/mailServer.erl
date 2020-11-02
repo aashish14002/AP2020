@@ -20,8 +20,9 @@ stopAllAnalysis(AL) ->
 
 
 init(_Args) ->
-    
-    {ok, #{capacity => infinite, mails => [], filters => #{}}}. %% filters labels => {filt, data}
+    %% filters labels => {filt, Data} 
+    %% filt = {simple, filter_fun()} | {chain, [{simple, filter_fun()}]}
+    {ok, #{capacity => infinite, mails => [], filters => #{}}}. 
 
 handle_call(stop, _, #{mails := MailsL}=State) ->
     Result = [ stopFiltersAndGetAnalysis(M) || M <- MailsL],
@@ -40,10 +41,13 @@ handle_cast({default, Label, Filt, Data}, #{filters := Filters}=State) ->
                     {simple, _} -> UpdatedFilters = Filters#{Label => {Filt, Data}},
                                 UpdatedState = State#{filters := UpdatedFilters},
                                 {noreply, UpdatedState};
-                    _ ->  io:format("code_chanyge: ~p~n", [State]),
+                    {chain, _} -> UpdatedFilters = Filters#{Label => {Filt, Data}},
+                                UpdatedState = State#{filters := UpdatedFilters},
+                                {noreply, UpdatedState};
+                    _ ->  io:format("code_change MAILSERVER_DEFAULT_NONE: ~p~n", [State]),
                         {noreply, State}
                 end;
-        _ ->  io:format("code_chanyge: ~p~n", [State]),
+        _ ->  io:format("code_change MAIL_SERVER_DEFAULT: ~p~n", [State]),
                 {noreply, State}
 
     end;

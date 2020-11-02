@@ -1,23 +1,30 @@
 -module(simplefilter).
--export([try_it/0]).
+-export([try_it/0,oneway/1]).
 importance(M, C) ->
   Important = binary:compile_pattern([<<"AP">>, <<"Haskell">>, <<"Erlang">>]),
   case binary:match(M, Important, []) of
     nomatch -> {just, C#{spam => true}};
     _ -> {just, C#{importance => 10000}} end.
 
+importance2(M, C) ->
+  {transformed, <<"FOrget it">>}.
+
 oneway(Mail) ->
   {ok, MS} = mailfilter:start(infinite),
   mailfilter:default(MS, importance, {simple, fun importance/2}, #{}),
+  mailfilter:default(MS, importance1, {simple, fun importance/2}, #{}),
+  mailfilter:default(MS, importance2, {simple, fun importance2/2}, #{}),
+
   {ok, MR} = mailfilter:add_mail(MS, Mail),
-  timer:sleep(50), % Might not be needed,
+  mailfilter:add_filter(MR, importance3, {simple, fun importance/2}, #{}),
+
+  timer:sleep(2000), % Might not be needed,
                    % but we'll give mailfilter a fighting chance to run the filters
-  {ok, [{importance, Res}]} = mailfilter:get_config(MR),
-  {MS, Res}.
+  mailfilter:get_config(MR).
 
 another(Mail) ->
   {ok, MS} = mailfilter:start(infinite),
-  
+
   {ok, MR} = mailfilter:add_mail(MS, Mail),
   mailfilter:add_filter(MR, "importance", {simple, fun importance/2}, #{}),
   mailfilter:add_filter(MR, ap_r0cks, {simple, fun(<<M:24/binary, _>>) ->
