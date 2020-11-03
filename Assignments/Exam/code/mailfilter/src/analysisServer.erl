@@ -59,13 +59,20 @@ handle_cast({add_filter, Label, Filt, Data}, #{mail := Mail, filterServers := Fi
                                 runFilter(FS),
                                 UpdatedFilters = FilterD#{Label => {Filt, Data}},
                                 UpdatedState = State#{filterData := UpdatedFilters, filterServers := [FS|FilterServers]},
-                                            {noreply, UpdatedState};
+                                {noreply, UpdatedState};
                     {group, _, _} -> [FS] = startFilters(Mail, #{Label => {Filt, Data}}),
                                 
                                 runFilter(FS),
                                 UpdatedFilters = FilterD#{Label => {Filt, Data}},
                                 UpdatedState = State#{filterData := UpdatedFilters, filterServers := [FS|FilterServers]},
                                 io:format("code_change ANALYSIS Add_FILTER_GROUP: ~p~n", [State]),
+                                {noreply, UpdatedState};
+                    {timelimit, _, _} -> [FS] = startFilters(Mail, #{Label => {Filt, Data}}),
+                                
+                                runFilter(FS),
+                                UpdatedFilters = FilterD#{Label => {Filt, Data}},
+                                UpdatedState = State#{filterData := UpdatedFilters, filterServers := [FS|FilterServers]},
+                                io:format("code_change ANALYSIS Add_FILTER_TIMELIMIT: ~p~n", [State]),
                                 {noreply, UpdatedState};
                     _ ->  io:format("code_change ANALYSIS Add_FILTER_NONE: ~p~n", [State]),
                         {noreply, State}
@@ -75,26 +82,28 @@ handle_cast({add_filter, Label, Filt, Data}, #{mail := Mail, filterServers := Fi
 
     end;
 
-handle_cast({_, Label, just, UData}, #{filterResults := FilterResults}=State) ->
+handle_cast({F, Label, just, UData}, #{filterResults := FilterResults, filterServers := FilterServers}=State) ->
     % io:format("code_change ANALYSIS JUST DATA: ~p~n", [State#{filterResults => FilterResults#{Label => {done, UData} }}]),
-    {noreply, State#{filterResults => FilterResults#{Label => {done, UData} }}};
+    stopFilter(F),
+    {noreply, State#{filterResults => FilterResults#{Label => {done, UData} }, filterServers := lists:delete(F, FilterServers)}};
 
-handle_cast({F, Label, transformed, UMail}, #{filterData := FilterD, filterServers := FilterServers}=State) ->
+handle_cast({_, Label, transformed, UMail}, #{filterData := FilterD, filterServers := FilterServers}=State) ->
     #{Label := {_, Data}}=FilterD,
-    stopAllFilters(lists:delete(F, FilterServers)),
+    stopAllFilters(FilterServers),
     UpdatedServers = startFilters(UMail, maps:remove(Label, FilterD)),
-    UpdatedState = State#{ mail => UMail, filterServers => [F|UpdatedServers], filterResults => #{Label => {done, Data}}},
+    UpdatedState = State#{ mail => UMail, filterServers => UpdatedServers, filterResults => #{Label => {done, Data}}},
     % io:format("code_change ANALYSIS TRANSFORMED: ~p~n", [UpdatedState]),
     {noreply, UpdatedState};
 
-handle_cast({_, Label, unchanged}, #{filterData := FilterD, filterResults := FilterResults}=State) ->
+handle_cast({F, Label, unchanged}, #{filterData := FilterD, filterResults := FilterResults, filterServers := FilterServers}=State) ->
     #{Label := {_, Data}}=FilterD,
-    {noreply, State#{filterResults => FilterResults#{Label => {done, Data} }}};
+    stopFilter(F),
+    {noreply, State#{filterResults => FilterResults#{Label => {done, Data} }, filterServers := lists:delete(F, FilterServers)}};
 
-handle_cast({F, Label, both, UMail, UData}, #{filterData := FilterD, filterServers := FilterServers}=State) ->
-    stopAllFilters(lists:delete(F, FilterServers)),
+handle_cast({_, Label, both, UMail, UData}, #{filterData := FilterD, filterServers := FilterServers}=State) ->
+    stopAllFilters(FilterServers),
     UpdatedServers = startFilters(UMail, maps:remove(Label, FilterD)),
-    UpdatedState = State#{ mail => UMail, filterServers => [F|UpdatedServers], filterResults => #{Label => {done, UData}}},
+    UpdatedState = State#{ mail => UMail, filterServers => UpdatedServers, filterResults => #{Label => {done, UData}}},
     {noreply, UpdatedState};
 
 handle_cast(enough, #{filterServers := FilterServers, ms := MS}=State) ->

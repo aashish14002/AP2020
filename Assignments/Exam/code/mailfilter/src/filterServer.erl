@@ -82,18 +82,19 @@ handle_call(get_filter, From, #{label := Label, mail := Mail, data := Data, filt
         {group, FilterFunList, MergeFun} -> MFS = startNewFilters(Mail, Data, Label, none, FilterFunList),
                                             io:format("code_change RUN MERGE IN CHAIN FILTER MAIN: ~p~n", [State#{mergeFun := MergeFun, groupFilterServers := MFS, mrgChain := From}]),
                                             {noreply, State#{mergeFun := MergeFun, groupFilterServers := MFS, mrgChain := From}};
-        {timelimit, TimeOut, FilterFun} -> {reply, {Label, unchanged}, State};
+        {timelimit, TimeOut, FilterFun} -> {ok, FSC} = start([Label, FilterFun, Mail, Data, none, self()]),
+                                            Result = try gen_server:call(FSC, get_filter, TimeOut) of
+                                                    {_, {just, UData}} -> {Label, {just, UData}};
+                                                    {_, {transformed, UMail}} -> {Label, {transformed, UMail}};
+                                                    {_, unchanged} -> {Label, unchanged};
+                                                    {_, {both, UMail, UData}} -> {Label, {both, UMail, UData}}
+                                                catch
+                                                    _:_ -> {Label, unchanged}
+                                                end,
+                                            gen_server:cast(FSC, stop),
+                                            {reply, Result, State};
         _                   -> {reply, {Label, unchanged}, State}
-        
-                                
-        % {chain, FilterFunList} -> try FilterFun(Mail, Data) of
-        %                         {just, UData} -> gen_server:call(AS,{self(), Label, just, UData});
-        %                         {transformed, UMail} -> gen_server:call(AS, {self(), Label, transformed, UMail});
-        %                         unchanged -> gen_server:call(AS, {self(), Label, unchanged});
-        %                         {both, UMail, UData} -> gen_server:call(AS, {self(), Label, both, UMail, UData})
-        %                     catch
-        %                         _:_ -> gen_server:call(AS, {self(), Label, unchanged})
-        %                     end        
+           
     end;
     
 handle_call(_, _, State) ->
@@ -149,7 +150,17 @@ handle_cast(run_filter, #{label := Label, mail := Mail, data := Data, filter := 
         {group, FilterFunList, MergeFun} -> MFS = startNewFilters(Mail, Data, Label, none, FilterFunList),
                                     io:format("code_change RUN MERGE FILTER MAIN: ~p~n", [State#{mergeFun := MergeFun, groupFilterServers := MFS, mrgChain := false}]),
                                         {noreply, State#{mergeFun := MergeFun, groupFilterServers := MFS, mrgChain := false}};
-        {timelimit, TimeOut, FilterFun} -> {noreply, State};
+        {timelimit, TimeOut, FilterFun} -> {ok, FSC} = start([Label, FilterFun, Mail, Data, none, self()]),
+                                            try gen_server:call(FSC, get_filter, TimeOut) of
+                                                {L, {just, UData}} -> gen_server:cast(AS,{self(), L, just, UData});
+                                                {L, {transformed, UMail}} -> gen_server:cast(AS, {self(), L, transformed, UMail});
+                                                {L, unchanged} -> gen_server:cast(AS, {self(), L, unchanged});
+                                                {L, {both, UMail, UData}} -> gen_server:cast(AS, {self(), L, both, UMail, UData})
+                                            catch
+                                                _:_ -> gen_server:cast(AS, {self(), Label, unchanged})
+                                            end,
+                                            gen_server:cast(FSC, stop),
+                                            {noreply, State};
         _                           ->  {noreply, State}
    
     end;
@@ -161,7 +172,7 @@ handle_cast({MF, Label, just, UData}, #{groupResults := GroupResults, mergeFun :
     io:format("code_change HANDLE INNER JUST MERGE RESULTS: ~p~n", [State#{groupResults => UpdatedGroupResults }]),
     Result = [ maps:get(F, UpdatedGroupResults, inprogress)|| F <- GroupFilterServers],
     UMrgChain = applyMerge(Label, AS, MergeFun, Result, MrgChain),
-
+    stopNewFilter(MF),
     {noreply, State#{groupResults => UpdatedGroupResults, mrgChain := UMrgChain}};
 
 handle_cast({MF, Label, transformed, UMail}, #{groupResults := GroupResults, mergeFun := MergeFun, groupFilterServers := GroupFilterServers, as := AS, mrgChain := MrgChain}=State) ->
@@ -169,21 +180,21 @@ handle_cast({MF, Label, transformed, UMail}, #{groupResults := GroupResults, mer
     Result = [ maps:get(F, UpdatedGroupResults, inprogress)|| F <- GroupFilterServers],
     io:format("code_change HANDLE INNER TRANSFORMED MERGE RESULTS: ~p~n", [State#{groupResults => UpdatedGroupResults }]),
     UMrgChain = applyMerge(Label, AS, MergeFun, Result, MrgChain),
-
+    stopNewFilter(MF),
     {noreply, State#{groupResults => UpdatedGroupResults, mrgChain := UMrgChain}};
 
 handle_cast({MF, Label, unchanged}, #{groupResults := GroupResults, mergeFun := MergeFun, groupFilterServers := GroupFilterServers, as := AS, mrgChain := MrgChain}=State) ->
     UpdatedGroupResults = GroupResults#{MF => unchanged},
     Result = [ maps:get(F, UpdatedGroupResults, inprogress)|| F <- GroupFilterServers],
     UMrgChain = applyMerge(Label, AS, MergeFun, Result, MrgChain),
-
+    stopNewFilter(MF),
     {noreply, State#{groupResults => UpdatedGroupResults, mrgChain := UMrgChain}};
 
 handle_cast({MF, Label, both, UMail, UData}, #{groupResults := GroupResults, mergeFun := MergeFun, groupFilterServers := GroupFilterServers, as := AS, mrgChain := MrgChain}=State) ->
     UpdatedGroupResults = GroupResults#{MF => {both, UMail, UData}},
     Result = [ maps:get(F, UpdatedGroupResults, inprogress)|| F <- GroupFilterServers],
     UMrgChain = applyMerge(Label, AS, MergeFun, Result, MrgChain),
-
+    stopNewFilter(MF),
     {noreply, State#{groupResults => UpdatedGroupResults, mrgChain := UMrgChain}};
 
 handle_cast(stop, #{groupFilterServers := GroupFilterServers}=State) ->

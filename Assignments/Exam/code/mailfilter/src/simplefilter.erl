@@ -72,7 +72,8 @@ another1(Mail) ->
     mailfilter:add_filter(MR, ap_r0cks, {simple, fun(<<M:24/binary, _>>) ->
                                                      {transform, M} end}, flap),
     mailfilter:add_filter(MR, ap_r0cks1, {group,[{chain,[{simple, fun importance2/2},{simple, fun importance/2}] },{simple, fun importance3/2}],fun mergeFun/1 }, #{}),
-    mailfilter:add_filter(MR, ap_r0cks2, {chain,[{group,[{simple, fun importance2/2},{simple, fun importance/2}],fun mergeFun/1 },{simple, fun importance2/2},{simple, fun importance/2}]}, #{}),
+    mailfilter:add_filter(MR, ap_r0cks2, {timelimit, infinity, {chain,[{group,[{simple, fun importance2/2},{simple, fun importance/2}],fun mergeFun/1 },{simple, fun importance2/2},{simple, fun importance/2}]}}, #{}),
+    mailfilter:add_filter(MR, ap_r0cks3, {timelimit, 1, {chain,[{group,[{simple, fun importance2/2},{simple, fun importance/2}],fun mergeFun/1 },{simple, fun importance2/2},{simple, fun importance/2}]}}, #{}),
 
     timer:sleep(2000), % Might not be needed
     A =  mailfilter:stop(MS),
