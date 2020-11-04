@@ -19,6 +19,7 @@ stopAllAnalysis(AL) ->
     lists:foreach(fun stopAnalysis/1, AL).
 
 
+
 init(_Args) ->
     %% filters labels => {filt, Data} 
     %% filt = {simple, filter_fun()} | {chain, [{simple, filter_fun()}]}
@@ -26,9 +27,10 @@ init(_Args) ->
 
 handle_call(stop, _, #{mails := MailsL}=State) ->
     
-    Result = [ stopFiltersAndGetAnalysis(M) || M <- MailsL],
-    stopAllAnalysis(MailsL),
-    io:format("STOP MAILSERVER: -----------------------------------------------------~p~n", [MailsL]),
+    Result1 = [try stopFiltersAndGetAnalysis(M) of A -> A catch _:_ -> none end || M <- MailsL],
+    Result = lists:filter(fun(A) -> A=/=none end, Result1),
+    % stopAllAnalysis(MailsL),
+    % io:format("STOP MAILSERVER: -----------------------------------------------------~p~n", [MailsL]),
     {reply, {ok, Result}, State#{mails := [], filters := #{}}};
 
 
@@ -63,8 +65,8 @@ handle_cast({default, Label, Filt, Data}, #{filters := Filters}=State) ->
     end;
 
 handle_cast({remove_analysis, A}, #{mails := MailsL}=State) ->
-    stopAnalysis(A),
-    io:format("REMOVE ANALYSIS FROM MAILSERVER: ~p~n", [lists:delete(A, MailsL)]),
+    % stopAnalysis(A),
+    % io:format("REMOVE ANALYSIS FROM MAILSERVER: ~p~n", [lists:delete(A, MailsL)]),
     
     {noreply, State#{mails := lists:delete(A, MailsL)}};
 

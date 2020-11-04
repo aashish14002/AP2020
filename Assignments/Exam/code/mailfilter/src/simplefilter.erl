@@ -25,7 +25,7 @@ inProgress(P) ->
 mergeFun(F) ->
     case lists:any(fun inProgress/1,F) of
       true -> continue;
-      _  -> io:fwrite("MERGE FUNCTION : ~p ~n" , [F]),lists:last(F)
+      _  -> lists:last(F)
     end.
   
 
@@ -71,18 +71,20 @@ another1(Mail) ->
   another(Mail) ->
     {ok, MS} = mailfilter:start(infinite),
     {ok, MR} = mailfilter:add_mail(MS, Mail),
-    mailfilter:add_filter(MR, "importance", {simple, fun importance/2}, #{}),
     {ok, MR1} = mailfilter:add_mail(MS, Mail),
-    % mailfilter:add_filter(MR, ap_r0cks, {simple, fun(<<M:24/binary, _>>) ->
-    %                                                  {transform, M} end}, flap),
-    % mailfilter:add_filter(MR, ap_r0cks1, {group,[{chain,[{simple, fun importance2/2},{simple, fun importance/2}] },{simple, fun importance3/2}],fun mergeFun/1 }, #{}),
-    % mailfilter:add_filter(MR, ap_r0cks2, {timelimit, infinity, {chain,[{group,[{simple, fun importance2/2},{simple, fun importance/2}],fun mergeFun/1 },{simple, fun importance2/2},{simple, fun importance/2}]}}, #{}),
-    % mailfilter:add_filter(MR, ap_r0cks3, {timelimit, 1, {chain,[{group,[{simple, fun importance2/2},{simple, fun importance/2}],fun mergeFun/1 },{simple, fun importance2/2},{simple, fun importance/2}]}}, #{}),
+    mailfilter:add_filter(MR, "importance", {simple, fun importance/2}, #{}),
+    
+    mailfilter:add_filter(MR, ap_r0cks, {simple, fun(<<M:24/binary, _>>) ->
+                                                     {transform, M} end}, flap),
+    mailfilter:add_filter(MR, ap_r0cks1, {group,[{chain,[{simple, fun importance2/2},{simple, fun importance/2}] },{simple, fun importance3/2}],fun mergeFun/1 }, #{}),
+    mailfilter:add_filter(MR, ap_r0cks2, {timelimit, infinity, {chain,[{group,[{simple, fun importance2/2},{simple, fun importance/2}],fun mergeFun/1 },{simple, fun importance2/2},{simple, fun importance/2}]}}, #{}),
+    mailfilter:add_filter(MR, ap_r0cks3, {timelimit, 1, {chain,[{group,[{simple, fun importance2/2},{simple, fun importance/2}],fun mergeFun/1 },{simple, fun importance2/2},{simple, fun importance/2}]}}, #{}),
 
-    % timer:sleep(2000), % Might not be needed
+    timer:sleep(500), % Might not be needed
     A1 = mailfilter:get_config(MR),
-    mailfilter:enough(MR),
-     timer:sleep(2000), % Might not be needed
+    %  mailfilter:enough(MR),
+    %  mailfilter:enough(MR1),
+    %  timer:sleep(2000), % Might not be needed
     A =  mailfilter:stop(MS),
     % {ok, [{M, Config}]} = mailfilter:stop(MS),
     % [Res] = [ Result || {Label, Result} <- Config, Label == "importance"],
