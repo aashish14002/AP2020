@@ -41,7 +41,7 @@ init(AnalysisData) ->
 handle_call(stop_filters, _, #{mail := Mail, filterData := FilterD, filterServers := FilterServers, filterResults := FilterResults}=State) ->
     stopAllFilters(FilterServers),
     Result = {Mail, [ {L, maps:get(L, FilterResults, inprogress)}|| L <- maps:keys(FilterD)]}, 
-    {reply, Result, State};
+    {reply, Result, State#{filterServers := [], filterData :=#{}}};
 
 handle_call(get_config, _, #{filterData := FilterD, filterResults := FilterResults}=State) ->
     Result = [ {L, maps:get(L, FilterResults, inprogress)}|| L <- maps:keys(FilterD)],
@@ -109,10 +109,13 @@ handle_cast({_, Label, both, UMail, UData}, #{filterData := FilterD, filterServe
 handle_cast(enough, #{filterServers := FilterServers, ms := MS}=State) ->
     stopAllFilters(FilterServers),
     removeAnalysis(MS, self()),
-    {noreply, State};
+    io:format("ENOUGH CAST ++++++++++++++++++++++++++++++++++++++++++++++++++++++++: ~p~n", [State]),
+    {noreply, State#{filterServers := [],filterResults := #{}}};
 
-handle_cast(stop, State) ->
-    {stop, normal, State};
+handle_cast(stop, #{filterServers := FilterServers}=State) ->
+    stopAllFilters(FilterServers),
+    io:format("STOP FROM ANALYSIS----------------------------------: ~p~n", [State]),
+    {stop, normal, State#{filterServers := [],filterResults := #{},filterData := #{} }};
 
 handle_cast(_, State) ->
     {ok, State}.

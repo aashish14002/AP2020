@@ -1,9 +1,6 @@
 -module(simplefilter).
 -export([try_it/0,oneway/1,another/1,oneway1/1,another1/1,inProgress/1]).
--compile(mailServer).
--compile(mailfilter).
--compile(analysisServer).
--compile(filterServer).
+
 importance(M, C) ->
   Important = binary:compile_pattern([<<"AP">>, <<"Haskell">>, <<"Erlang">>]),
   case binary:match(M, Important, []) of
@@ -75,17 +72,21 @@ another1(Mail) ->
     {ok, MS} = mailfilter:start(infinite),
     {ok, MR} = mailfilter:add_mail(MS, Mail),
     mailfilter:add_filter(MR, "importance", {simple, fun importance/2}, #{}),
-    mailfilter:add_filter(MR, ap_r0cks, {simple, fun(<<M:24/binary, _>>) ->
-                                                     {transform, M} end}, flap),
-    mailfilter:add_filter(MR, ap_r0cks1, {group,[{chain,[{simple, fun importance2/2},{simple, fun importance/2}] },{simple, fun importance3/2}],fun mergeFun/1 }, #{}),
-    mailfilter:add_filter(MR, ap_r0cks2, {timelimit, infinity, {chain,[{group,[{simple, fun importance2/2},{simple, fun importance/2}],fun mergeFun/1 },{simple, fun importance2/2},{simple, fun importance/2}]}}, #{}),
-    mailfilter:add_filter(MR, ap_r0cks3, {timelimit, 1, {chain,[{group,[{simple, fun importance2/2},{simple, fun importance/2}],fun mergeFun/1 },{simple, fun importance2/2},{simple, fun importance/2}]}}, #{}),
+    {ok, MR1} = mailfilter:add_mail(MS, Mail),
+    % mailfilter:add_filter(MR, ap_r0cks, {simple, fun(<<M:24/binary, _>>) ->
+    %                                                  {transform, M} end}, flap),
+    % mailfilter:add_filter(MR, ap_r0cks1, {group,[{chain,[{simple, fun importance2/2},{simple, fun importance/2}] },{simple, fun importance3/2}],fun mergeFun/1 }, #{}),
+    % mailfilter:add_filter(MR, ap_r0cks2, {timelimit, infinity, {chain,[{group,[{simple, fun importance2/2},{simple, fun importance/2}],fun mergeFun/1 },{simple, fun importance2/2},{simple, fun importance/2}]}}, #{}),
+    % mailfilter:add_filter(MR, ap_r0cks3, {timelimit, 1, {chain,[{group,[{simple, fun importance2/2},{simple, fun importance/2}],fun mergeFun/1 },{simple, fun importance2/2},{simple, fun importance/2}]}}, #{}),
 
-    timer:sleep(2000), % Might not be needed
+    % timer:sleep(2000), % Might not be needed
+    A1 = mailfilter:get_config(MR),
+    mailfilter:enough(MR),
+     timer:sleep(2000), % Might not be needed
     A =  mailfilter:stop(MS),
     % {ok, [{M, Config}]} = mailfilter:stop(MS),
     % [Res] = [ Result || {Label, Result} <- Config, Label == "importance"],
-    A.
+    {A1,A}.
     %%{M, Res}.
   
   try_it() ->

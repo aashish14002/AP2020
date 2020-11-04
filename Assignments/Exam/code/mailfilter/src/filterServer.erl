@@ -199,7 +199,7 @@ handle_cast({MF, Label, both, UMail, UData}, #{groupResults := GroupResults, mer
 
 handle_cast(stop, #{groupFilterServers := GroupFilterServers}=State) ->
     stopAllFilters(GroupFilterServers),
-    {stop, normal, State}.
+    {stop, normal, State#{groupFilterServers := []}}.
 
 handle_info(Info, State) ->
     io:format("Error: ~p~n",[Info]),

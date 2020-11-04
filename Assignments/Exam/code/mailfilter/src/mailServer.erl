@@ -25,10 +25,14 @@ init(_Args) ->
     {ok, #{capacity => infinite, mails => [], filters => #{}}}. 
 
 handle_call(stop, _, #{mails := MailsL}=State) ->
+    
     Result = [ stopFiltersAndGetAnalysis(M) || M <- MailsL],
     stopAllAnalysis(MailsL),
+    io:format("STOP MAILSERVER: -----------------------------------------------------~p~n", [MailsL]),
     {reply, {ok, Result}, State#{mails := [], filters := #{}}};
 
+
+    
 handle_call({add_mail, Mail}, _, #{mails := MailsL, filters := FiltersL}=State) ->
     {ok, MAnalysis} =  analysisServer:start_link([Mail, FiltersL, self()]),
     UpdatedMails = MailsL ++ [MAnalysis],
@@ -60,11 +64,13 @@ handle_cast({default, Label, Filt, Data}, #{filters := Filters}=State) ->
 
 handle_cast({remove_analysis, A}, #{mails := MailsL}=State) ->
     stopAnalysis(A),
+    io:format("REMOVE ANALYSIS FROM MAILSERVER: ~p~n", [lists:delete(A, MailsL)]),
+    
     {noreply, State#{mails := lists:delete(A, MailsL)}};
 
-    
-handle_cast(stop, State) ->
-    {stop, normal, State}.
+handle_cast(stop, #{mails := MailsL}=State) ->
+    stopAllAnalysis(MailsL),
+    {stop, normal, State#{mails := [], filters := #{}}}.
 
 
 handle_info(Info, State) ->

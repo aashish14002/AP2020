@@ -39,7 +39,7 @@ default(_MS, _Label, _Filt, _Data) ->
   gen_server:cast(_MS, {default, _Label, _Filt, _Data}).
 
 enough(_MR) ->
-  not_implemented.
+  gen_server:cast(_MR, enough).
 
 add_filter(_MR, _Label, _Filt, _Data) ->
   gen_server:cast(_MR, {add_filter, _Label, _Filt, _Data}).
