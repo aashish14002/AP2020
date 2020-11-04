@@ -42,10 +42,10 @@ tests:
       - QuickCheck
       - tasty-quickcheck
       # Don't add anything else here
-#  other-test-suite1:  # currently a no-op
-#    main: WhiteBox.hs
-#    source-dirs: [tests/suite1, src]
-#    dependencies: # not all may be relevant
-#      - tasty
-#      - tasty-hunit
-#      # Whatever else you need from the course LTS version
+  other-test-suite1:  # currently a no-op
+   main: WhiteBox.hs
+   source-dirs: [tests/suite1, src]
+   dependencies: # not all may be relevant
+     - tasty
+     - tasty-hunit
+     # Whatever else you need from the course LTS version

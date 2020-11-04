@@ -23,7 +23,7 @@ parseString pgrm = case readP_to_S program pgrm of
             [] -> Left (EUser "no Parse")
             x -> case last x of
                         (e, "") -> Right e
-                        _ -> Left (EInternal "no Parse")
+                        _ -> Left (EUser "no Parse")
 
 program :: Parser Program
 program = tokenSpace (do
@@ -245,18 +245,36 @@ name :: Parser String
 name = do 
             skipComments
             c <- satisfy isLetter
-            cs <- many (satisfy isLetter <|> satisfy isDigit <|> satisfy (\c -> c=='_'))
+            cs <- many alphaNumericUnderscore
             skipComments
             if ((c:cs) `elem` resKeywords) then
                 pfail
             else return (c:cs)
 
+alphaNumericUnderscore :: Parser Char
+alphaNumericUnderscore = satisfy isLetter 
+                        <|> satisfy isDigit 
+                        <|> satisfy (\c -> c=='_')
+
+
+
 skipComments :: Parser ()
 skipComments = do
             skipSpaces
             string "(*"
-            manyTill get (string "*)")
+            -- manyTill get (string "*)")
+            skipCommentContent
             skipSpaces
             skipComments
         <|>
             return ()
+
+skipCommentContent :: Parser String
+skipCommentContent = do
+                        string "*)"
+                        return ""
+                    <|> 
+                    do
+                        c <- get
+                        s <- skipCommentContent
+                        return (c:s)

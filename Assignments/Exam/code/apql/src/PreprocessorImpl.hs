@@ -95,12 +95,14 @@ ruleToCLause ((Rule a c):p) = (fmap (pClauseToClause a) (condToPClause c))++(rul
 
 ruleToPspec :: [Clause] -> [PSpec]
 ruleToPspec [] = []
-ruleToPspec ((Clause a aL tL):p) = (getPspec a):(ruleToPspec p)
+ruleToPspec ((Clause a aL tL):p) = if (specA `elem` specList) then specList else (specA:specList)
+                                    where specA = (getPspec a); specList = (ruleToPspec p)
 
 
 getVNames :: Atom -> [VName]
 getVNames (Atom _ []) = []
-getVNames (Atom pName ((TVar t):terms)) = t:(getVNames(Atom pName terms))
+getVNames (Atom pName ((TVar t):terms)) = if (t `elem` vList) then vList else (t:vList)
+                                    where vList = (getVNames(Atom pName terms))
 getVNames (Atom pName ((TData t):terms)) = getVNames(Atom pName terms)
 
 verifyClause :: Clause -> Bool

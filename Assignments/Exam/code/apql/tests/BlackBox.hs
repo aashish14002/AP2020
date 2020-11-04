@@ -33,6 +33,11 @@ rudimentary =
       parseString pgmStr @?= Right pgmAST,
     testCaseBad "parse2" $
       parseString "p(x) if .",
+    testCase "parse3" $
+      parseString parse3 @?= Right ast3,
+
+
+
     testCase "clausify1" $
       clausify pgmAST @?= Right pgmIDB,
     testCaseBad "clausify2" $
@@ -62,3 +67,8 @@ rudimentary =
    pgmExtQ = S.fromList [["a"]]
    pgmExtP = S.fromList [["a", "b"], ["a", "c"]]
    pgmEDB = [(("p",2),pgmExtP), (("q",1), pgmExtQ), (("r",1), pgmExtR)]
+   parse3 =  "myquery(x) if sibling(\"Frank\", x) and not ancestor(x, \"Rupert\")." 
+   ast3   = [Rule (Atom "myquery" [TVar "x"]) 
+              (CAnd (CAtom (Atom "sibling" [TData "Frank",TVar "x"]))
+                      (CNot (CAtom (Atom "ancestor" 
+                              [TVar "x",TData "Rupert"]))))]
