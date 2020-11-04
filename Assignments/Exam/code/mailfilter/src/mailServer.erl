@@ -10,7 +10,7 @@ start_link() ->
     gen_server:start(?MODULE, [], []).
 
 stopFiltersAndGetAnalysis(A) -> 
-    gen_server:call(A, stop_filters).
+    gen_server:call(A, stop_filters, infinity).
 
 stopAnalysis(A) ->
     gen_server:cast(A, stop).
@@ -28,7 +28,7 @@ handle_call(stop, _, #{mails := MailsL}=State) ->
     
     Result = [ stopFiltersAndGetAnalysis(M) || M <- MailsL],
     stopAllAnalysis(MailsL),
-    io:format("STOP MAILSERVER: -----------------------------------------------------~p~n", [MailsL]),
+    % io:format("STOP MAILSERVER: -----------------------------------------------------~p~n", [MailsL]),
     {reply, {ok, Result}, State#{mails := [], filters := #{}}};
 
 
@@ -54,27 +54,27 @@ handle_cast({default, Label, Filt, Data}, #{filters := Filters}=State) ->
                     {timelimit, _, _} -> UpdatedFilters = Filters#{Label => {Filt, Data}},
                                 UpdatedState = State#{filters := UpdatedFilters},
                                 {noreply, UpdatedState};
-                    _ ->  io:format("code_change MAILSERVER_DEFAULT_NONE: ~p~n", [State]),
+                    _ ->  %io:format("code_change MAILSERVER_DEFAULT_NONE: ~p~n", [State]),
                         {noreply, State}
                 end;
-        _ ->  io:format("code_change MAIL_SERVER_DEFAULT: ~p~n", [State]),
+        _ ->  %io:format("code_change MAIL_SERVER_DEFAULT: ~p~n", [State]),
                 {noreply, State}
 
     end;
 
 handle_cast({remove_analysis, A}, #{mails := MailsL}=State) ->
     stopAnalysis(A),
-    io:format("REMOVE ANALYSIS FROM MAILSERVER: ~p~n", [lists:delete(A, MailsL)]),
+    % io:format("REMOVE ANALYSIS FROM MAILSERVER: ~p~n", [lists:delete(A, MailsL)]),
     
     {noreply, State#{mails := lists:delete(A, MailsL)}};
 
 handle_cast(stop, #{mails := MailsL}=State) ->
     stopAllAnalysis(MailsL),
-    {stop, normal, State#{mails := [], filters := #{}}}.
+    {stop, normal, State}.
 
 
 handle_info(Info, State) ->
-    io:format("Error: ~p~n",[Info]),
+    % io:format("Error: ~p~n",[Info]),
     {noreply, State}.
 
 terminate(_Reason, _State) ->

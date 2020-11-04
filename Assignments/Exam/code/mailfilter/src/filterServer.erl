@@ -33,23 +33,31 @@ end.
 applyMerge(Label, AS, MergeFun, FunResults, MrgChain) ->
     Res = case MergeFun(FunResults) of 
             {just, UData} -> case MrgChain of
-                                false -> io:format("code_change APPLY MERGE JUST 1 ~p~n", [[MrgChain, AS,Label]]),gen_server:cast(AS,{self(), Label, just, UData});
-                                _ -> io:format("code_change APPLY MERGE CALL JUST 1 ~p~n", [[MrgChain, AS,Label]]),gen_server:reply(MrgChain, {Label,{just, UData}})       
+                                false -> %io:format("code_change APPLY MERGE JUST 1 ~p~n", [[MrgChain, AS,Label]]),
+                                gen_server:cast(AS,{self(), Label, just, UData});
+                                _ -> %io:format("code_change APPLY MERGE CALL JUST 1 ~p~n", [[MrgChain, AS,Label]]),
+                                gen_server:reply(MrgChain, {Label,{just, UData}})       
                             end,
                             false;         
             {transformed, UMail} ->case MrgChain of
-                                false -> io:format("code_change APPLY MERGE 1 TRANS~p~n", [[MrgChain, AS,Label]]),gen_server:cast(AS, {self(), Label, transformed, UMail});
-                                _ -> io:format("code_change APPLY MERGE CALL TRANS 1 ~p~n", [[MrgChain, AS,Label]]),gen_server:reply(MrgChain, {transformed, UMail})
+                                false -> %io:format("code_change APPLY MERGE 1 TRANS~p~n", [[MrgChain, AS,Label]]),
+                                gen_server:cast(AS, {self(), Label, transformed, UMail});
+                                _ -> %io:format("code_change APPLY MERGE CALL TRANS 1 ~p~n", [[MrgChain, AS,Label]]),
+                                gen_server:reply(MrgChain, {transformed, UMail})
                             end,
                             false;
             unchanged -> case MrgChain of
-                                false -> io:format("code_change APPLY MERGE 1 UNCH~p~n", [[MrgChain, AS,Label]]),gen_server:cast(AS, {self(), Label, unchanged});
-                                _ -> io:format("code_change APPLY MERGE CALL UNCH 1 ~p~n", [[MrgChain, AS,Label]]),gen_server:reply(MrgChain, unchanged)
+                                false -> %io:format("code_change APPLY MERGE 1 UNCH~p~n", [[MrgChain, AS,Label]]),
+                                gen_server:cast(AS, {self(), Label, unchanged});
+                                _ -> %io:format("code_change APPLY MERGE CALL UNCH 1 ~p~n", [[MrgChain, AS,Label]]),
+                                gen_server:reply(MrgChain, unchanged)
                             end,
                             false;                 
             {both, UMail, UData} -> case MrgChain of
-                                    false -> io:format("code_change APPLY MERGE 1 BOTH ~p~n", [[MrgChain, AS,Label]]),gen_server:cast(AS, {self(), Label, both, UMail, UData});
-                                    _ -> io:format("code_change APPLY MERGE CALL BOTH 1 ~p~n", [[MrgChain, AS,Label]]),gen_server:reply(MrgChain, {both, UMail, UData})
+                                    false -> %io:format("code_change APPLY MERGE 1 BOTH ~p~n", [[MrgChain, AS,Label]]),
+                                    gen_server:cast(AS, {self(), Label, both, UMail, UData});
+                                    _ -> %io:format("code_change APPLY MERGE CALL BOTH 1 ~p~n", [[MrgChain, AS,Label]]),
+                                    gen_server:reply(MrgChain, {both, UMail, UData})
                                 end,
                                 false;
             continue -> MrgChain;
@@ -74,13 +82,14 @@ handle_call(get_filter, From, #{label := Label, mail := Mail, data := Data, filt
                                                 {transformed, UMail, _, _} -> {Label, {transformed, UMail}};
                                                 {unchanged, _, _, _} -> {Label, unchanged};
                                                 {both, UMail, UData, _} -> {Label, {both, UMail, UData}};
-                                                _  -> io:format("FILTERFUN CALL NOT MATCH  ~p~n", [State]),{Label, unchanged}
+                                                _  -> %io:format("FILTERFUN CALL NOT MATCH  ~p~n", [State]),
+                                                {Label, unchanged}
                                             end,
-                                            io:format("code_change GET_FILTER OLD STATE  ~p~n", [State]),
-                                            io:format("code_change GET FILTER NEW STATE > MAIL > DATA > LABEL > FUNC - ~p >>>>> ~p~n", [FilterFunList, Result ]), 
+                                            % io:format("code_change GET_FILTER OLD STATE  ~p~n", [State]),
+                                            % io:format("code_change GET FILTER NEW STATE > MAIL > DATA > LABEL > FUNC - ~p >>>>> ~p~n", [FilterFunList, Result ]), 
                                 {reply, Result, State};
         {group, FilterFunList, MergeFun} -> MFS = startNewFilters(Mail, Data, Label, none, FilterFunList),
-                                            io:format("code_change RUN MERGE IN CHAIN FILTER MAIN: ~p~n", [State#{mergeFun := MergeFun, groupFilterServers := MFS, mrgChain := From}]),
+                                            % io:format("code_change RUN MERGE IN CHAIN FILTER MAIN: ~p~n", [State#{mergeFun := MergeFun, groupFilterServers := MFS, mrgChain := From}]),
                                             {noreply, State#{mergeFun := MergeFun, groupFilterServers := MFS, mrgChain := From}};
         {timelimit, TimeOut, FilterFun} -> {ok, FSC} = start([Label, FilterFun, Mail, Data, none, self()]),
                                             Result = try gen_server:call(FSC, get_filter, TimeOut) of
@@ -121,8 +130,8 @@ chainingHelper(Filt, {S, Mail, Data, Label}) ->
             {L, {both, UMail, UData}} -> {updatedFilterState(S, both), UMail, UData, L}
         end,
     gen_server:cast(FSC, stop),
-    io:format("code_change CHAINING HELPER OLD STATE  > MAIL > DATA > LABEL~p~n", [{Filt, S, Mail, Data, Label}]),
-    io:format("code_change CHAINING HELPER NEW STATE > MAIL > DATA > LABEL > FUNC - ~p >>>>> ~p~n", [Filt, Res ]),
+    % io:format("code_change CHAINING HELPER OLD STATE  > MAIL > DATA > LABEL~p~n", [{Filt, S, Mail, Data, Label}]),
+    % io:format("code_change CHAINING HELPER NEW STATE > MAIL > DATA > LABEL > FUNC - ~p >>>>> ~p~n", [Filt, Res ]),
     Res.
     
 
@@ -137,7 +146,7 @@ handle_cast(run_filter, #{label := Label, mail := Mail, data := Data, filter := 
                                 catch
                                     _:_ -> gen_server:cast(AS, {self(), Label, unchanged})
                                 end,
-                                io:format("code_change RUN MERGE INNER FUNCTION: ~p ~n", [State]),
+                                % io:format("code_change RUN MERGE INNER FUNCTION: ~p ~n", [State]),
                                       
                                 {noreply, State};
         {chain, FilterFunList} -> case lists:foldl(fun chainingHelper/2, {unchanged, Mail, Data, Label},FilterFunList) of
@@ -148,7 +157,7 @@ handle_cast(run_filter, #{label := Label, mail := Mail, data := Data, filter := 
                                 end,
                                 {noreply, State};
         {group, FilterFunList, MergeFun} -> MFS = startNewFilters(Mail, Data, Label, none, FilterFunList),
-                                    io:format("code_change RUN MERGE FILTER MAIN: ~p~n", [State#{mergeFun := MergeFun, groupFilterServers := MFS, mrgChain := false}]),
+                                    % io:format("code_change RUN MERGE FILTER MAIN: ~p~n", [State#{mergeFun := MergeFun, groupFilterServers := MFS, mrgChain := false}]),
                                         {noreply, State#{mergeFun := MergeFun, groupFilterServers := MFS, mrgChain := false}};
         {timelimit, TimeOut, FilterFun} -> {ok, FSC} = start([Label, FilterFun, Mail, Data, none, self()]),
                                             try gen_server:call(FSC, get_filter, TimeOut) of
@@ -169,7 +178,7 @@ handle_cast(run_filter, #{label := Label, mail := Mail, data := Data, filter := 
 
 handle_cast({MF, Label, just, UData}, #{groupResults := GroupResults, mergeFun := MergeFun, groupFilterServers := GroupFilterServers, as := AS, mrgChain := MrgChain}=State) ->
     UpdatedGroupResults = GroupResults#{MF => {just, UData}},
-    io:format("code_change HANDLE INNER JUST MERGE RESULTS: ~p~n", [State#{groupResults => UpdatedGroupResults }]),
+    % io:format("code_change HANDLE INNER JUST MERGE RESULTS: ~p~n", [State#{groupResults => UpdatedGroupResults }]),
     Result = [ maps:get(F, UpdatedGroupResults, inprogress)|| F <- GroupFilterServers],
     UMrgChain = applyMerge(Label, AS, MergeFun, Result, MrgChain),
     stopNewFilter(MF),
@@ -178,7 +187,7 @@ handle_cast({MF, Label, just, UData}, #{groupResults := GroupResults, mergeFun :
 handle_cast({MF, Label, transformed, UMail}, #{groupResults := GroupResults, mergeFun := MergeFun, groupFilterServers := GroupFilterServers, as := AS, mrgChain := MrgChain}=State) ->
     UpdatedGroupResults = GroupResults#{MF => {transformed, UMail}},
     Result = [ maps:get(F, UpdatedGroupResults, inprogress)|| F <- GroupFilterServers],
-    io:format("code_change HANDLE INNER TRANSFORMED MERGE RESULTS: ~p~n", [State#{groupResults => UpdatedGroupResults }]),
+    % io:format("code_change HANDLE INNER TRANSFORMED MERGE RESULTS: ~p~n", [State#{groupResults => UpdatedGroupResults }]),
     UMrgChain = applyMerge(Label, AS, MergeFun, Result, MrgChain),
     stopNewFilter(MF),
     {noreply, State#{groupResults => UpdatedGroupResults, mrgChain := UMrgChain}};
@@ -199,10 +208,10 @@ handle_cast({MF, Label, both, UMail, UData}, #{groupResults := GroupResults, mer
 
 handle_cast(stop, #{groupFilterServers := GroupFilterServers}=State) ->
     stopAllFilters(GroupFilterServers),
-    {stop, normal, State#{groupFilterServers := []}}.
+    {stop, normal, State}.
 
 handle_info(Info, State) ->
-    io:format("Error: ~p~n",[Info]),
+    % io:format("Error: ~p~n",[Info]),
     {noreply, State}.
 
 terminate(_Reason, _State) ->

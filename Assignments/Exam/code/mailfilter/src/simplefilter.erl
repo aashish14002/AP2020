@@ -59,9 +59,10 @@ another1(Mail) ->
 
   oneway(Mail) ->
     {ok, MS} = mailfilter:start(infinite),
-    mailfilter:default(MS, importance, {simple, fun importance2/2}, #{}),
-    mailfilter:default(MS, importance1, {simple, fun importance2/2}, #{}),
+    % mailfilter:default(MS, importance, {simple, fun importance2/2}, #{}),
+    %  mailfilter:default(MS, importance1, {simple, fun importance2/2}, #{}),
     {ok, MR} = mailfilter:add_mail(MS, Mail),
+     mailfilter:enough(MR),
     timer:sleep(50), % Might not be needed,
                      % but we'll give mailfilter a fighting chance to run the filters
     % {ok, [{importance, Res}]} = mailfilter:get_config(MR),

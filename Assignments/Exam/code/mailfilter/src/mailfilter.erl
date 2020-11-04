@@ -25,7 +25,7 @@ start(_Cap) ->
   mailServer: start_link().
 
 stop(_MS) ->
-  State = gen_server:call(_MS, stop),
+  State = gen_server:call(_MS, stop, infinity),
   gen_server:cast(_MS, stop),
   State.
 
@@ -33,7 +33,7 @@ add_mail(_MS, _Mail) ->
   gen_server:call(_MS, {add_mail, _Mail}).
 
 get_config(_MR) ->
-  gen_server:call(_MR, get_config).
+  gen_server:call(_MR, get_config, infinity).
 
 default(_MS, _Label, _Filt, _Data) ->
   gen_server:cast(_MS, {default, _Label, _Filt, _Data}).

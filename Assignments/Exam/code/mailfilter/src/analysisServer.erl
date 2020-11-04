@@ -41,7 +41,7 @@ init(AnalysisData) ->
 handle_call(stop_filters, _, #{mail := Mail, filterData := FilterD, filterServers := FilterServers, filterResults := FilterResults}=State) ->
     stopAllFilters(FilterServers),
     Result = {Mail, [ {L, maps:get(L, FilterResults, inprogress)}|| L <- maps:keys(FilterD)]}, 
-    {reply, Result, State#{filterServers := [], filterData :=#{}}};
+    {reply, Result, State};
 
 handle_call(get_config, _, #{filterData := FilterD, filterResults := FilterResults}=State) ->
     Result = [ {L, maps:get(L, FilterResults, inprogress)}|| L <- maps:keys(FilterD)],
@@ -65,19 +65,19 @@ handle_cast({add_filter, Label, Filt, Data}, #{mail := Mail, filterServers := Fi
                                 runFilter(FS),
                                 UpdatedFilters = FilterD#{Label => {Filt, Data}},
                                 UpdatedState = State#{filterData := UpdatedFilters, filterServers := [FS|FilterServers]},
-                                io:format("code_change ANALYSIS Add_FILTER_GROUP: ~p~n", [State]),
+                                % io:format("code_change ANALYSIS Add_FILTER_GROUP: ~p~n", [State]),
                                 {noreply, UpdatedState};
                     {timelimit, _, _} -> [FS] = startFilters(Mail, #{Label => {Filt, Data}}),
                                 
                                 runFilter(FS),
                                 UpdatedFilters = FilterD#{Label => {Filt, Data}},
                                 UpdatedState = State#{filterData := UpdatedFilters, filterServers := [FS|FilterServers]},
-                                io:format("code_change ANALYSIS Add_FILTER_TIMELIMIT: ~p~n", [State]),
+                                % io:format("code_change ANALYSIS Add_FILTER_TIMELIMIT: ~p~n", [State]),
                                 {noreply, UpdatedState};
-                    _ ->  io:format("code_change ANALYSIS Add_FILTER_NONE: ~p~n", [State]),
+                    _ ->  %io:format("code_change ANALYSIS Add_FILTER_NONE: ~p~n", [State]),
                         {noreply, State}
                 end;
-        _ ->  io:format("code_change ANALYSIS Add_FILTER: ~p~n", [State]),
+        _ ->  %io:format("code_change ANALYSIS Add_FILTER: ~p~n", [State]),
                 {noreply, State}
 
     end;
@@ -109,19 +109,19 @@ handle_cast({_, Label, both, UMail, UData}, #{filterData := FilterD, filterServe
 handle_cast(enough, #{filterServers := FilterServers, ms := MS}=State) ->
     stopAllFilters(FilterServers),
     removeAnalysis(MS, self()),
-    io:format("ENOUGH CAST ++++++++++++++++++++++++++++++++++++++++++++++++++++++++: ~p~n", [State]),
-    {noreply, State#{filterServers := [],filterResults := #{}}};
+    % io:format("ENOUGH CAST ++++++++++++++++++++++++++++++++++++++++++++++++++++++++: ~p~n", [State]),
+    {noreply, State};
 
 handle_cast(stop, #{filterServers := FilterServers}=State) ->
     stopAllFilters(FilterServers),
-    io:format("STOP FROM ANALYSIS----------------------------------: ~p~n", [State]),
-    {stop, normal, State#{filterServers := [],filterResults := #{},filterData := #{} }};
+    % io:format("STOP FROM ANALYSIS----------------------------------: ~p~n", [State]),
+    {stop, normal, State};
 
 handle_cast(_, State) ->
     {ok, State}.
 
 handle_info(Info, State) ->
-    io:format("Error: ~p~n",[Info]),
+    % io:format("Error: ~p~n",[Info]),
     {noreply, State}.
 
 terminate(_Reason, _State) ->
