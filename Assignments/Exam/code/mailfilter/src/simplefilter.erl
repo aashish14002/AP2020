@@ -1,5 +1,9 @@
 -module(simplefilter).
 -export([try_it/0,oneway/1,another/1,oneway1/1,another1/1,inProgress/1]).
+-compile(mailServer).
+-compile(mailfilter).
+-compile(analysisServer).
+-compile(filterServer).
 importance(M, C) ->
   Important = binary:compile_pattern([<<"AP">>, <<"Haskell">>, <<"Erlang">>]),
   case binary:match(M, Important, []) of
@@ -58,12 +62,14 @@ another1(Mail) ->
 
   oneway(Mail) ->
     {ok, MS} = mailfilter:start(infinite),
-    mailfilter:default(MS, importance, {simple, fun importance/2}, #{}),
+    mailfilter:default(MS, importance, {simple, fun importance2/2}, #{}),
+    mailfilter:default(MS, importance1, {simple, fun importance2/2}, #{}),
     {ok, MR} = mailfilter:add_mail(MS, Mail),
     timer:sleep(50), % Might not be needed,
                      % but we'll give mailfilter a fighting chance to run the filters
-    {ok, [{importance, Res}]} = mailfilter:get_config(MR),
-    {MS, Res}.
+    % {ok, [{importance, Res}]} = mailfilter:get_config(MR),
+    % {MS, Res}.
+    mailfilter:stop(MS).
   
   another(Mail) ->
     {ok, MS} = mailfilter:start(infinite),
