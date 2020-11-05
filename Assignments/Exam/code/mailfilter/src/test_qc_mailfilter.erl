@@ -6,7 +6,7 @@
 -behaviour(apqc_statem).
 -export([initial_state/0, command/1, precondition/2, postcondition/3, next_state/3]).
 
--export([prop_mailfilter/0,prop_mail_is_sacred/0]).
+-export([prop_mailfilter/0,prop_mail_is_sacred/0, prop_registered_filters/0]).
 -export([add_mail_to/2,start_mail_server/1, add_default_filter_to/4,
             get_mail_config/1, stop_mail_analysis/1, add_filter_to/4]). % Remember to export the other function from Q2.2
 
@@ -26,28 +26,40 @@ prop_mail_is_sacred() ->
             % eqc:format("~p~n------------------------------------------------------",[Cmds]),
             {_,S,_} = Result = run_commands(?MODULE, Cmds),
             timer:sleep(50),
-            AA=case maps:get(mail_serv, S) of 
-                none -> true;
-                A -> {ok, Res} = mailfilter:stop(A),
-                            model_check_mailfilter_config(S, Res)
-            end,
-            % case AA of
-            %     false -> eqc:format("~p~n------------------------------------------------------",[Cmds]),1;
-            %     true -> none
-            % end,
-            % % ML = mailfilter:stop(maps:get(mail_serv, S)),
-            eqc:format("~p~n------------------------------------------------------",[AA]),
+            Prop = case maps:get(mail_serv, S) of 
+                    none -> true;
+                    A -> {ok, Res} = mailfilter:stop(A),
+                                model_check_mailfilter_config(S, Res)
+                end,
+            check_commands(Cmds, Result, Prop)
             
-            check_commands(Cmds, Result, AA)
+        end).
+        
+prop_registered_filters() ->
+    ?FORALL(Cmds,commands(?MODULE),
+        begin
+            % eqc:format("~p~n------------------------------------------------------",[Cmds]),
+            {_,S,_} = Result = run_commands(?MODULE, Cmds),
+            timer:sleep(100),
+            {Re, Prop} = case maps:get(mail_serv, S) of 
+                    none -> {t, true};
+                    A -> {ok, Res} = mailfilter:stop(A),
+                                {Res, model_check_registered_filters(S, Res)}
+                end,
+            case Prop of 
+                false -> eqc:format("~p===== ~n~p~n~p~n|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||",[Cmds, S, Re]);
+                _ -> true
+            end,
+            check_commands(Cmds, Result, Prop)
             
         end).
 
 
 
-check_commands(Cmds, {_,_,Res} = HSRes, AA) ->
+check_commands(Cmds, {_,_,Res} = HSRes, Prop) ->
     pretty_commands(?MODULE, Cmds, HSRes,
                     aggregate(command_names(Cmds),
-                              AA)).
+                              Prop)).
 
 
 
@@ -147,23 +159,37 @@ get_mail_analysis(ML) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Models
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-model_add_mail(Mail, MailList) ->
-    [Mail|MailList].
+model_add_mail(Mail, Filters, MailList) ->
+    F = maps:keys(Filters),
+    MailList#{Mail => F}.
+    % F = maps:keys(Filters),
+    % case lists:member(Mail, maps:keys(MailList)) of
+    %     true -> MailList;
+    %     false -> MailList#{Mail => F}
+    % end.
 
 model_stop_mail_analysis(M, ML) ->
-    lists:delete(M, ML).
+    maps:remove(M, ML).
 
 model_add_default_filter(L, F, D, DF) ->
     case maps:get(L, DF, none) of
         none -> DF#{L => {F, D}};
         _ -> DF
     end.
-% list({mail(), list({label(), result()})})
+
+model_add_filter_to_mail(M, L, ML) ->
+    case maps:get(M, ML, none) of
+        none -> ML;
+        F -> case lists:member(L, F) of true -> ML; false -> ML#{M := [L|F]} end
+    end.
+
 model_check_mailfilter_config(#{mails := ML}, Res) ->
-    % A = change_data_filter_fun(),
-    % B = A(1,2),
-    % eqc:format("~p~n------------------------------------------------------",[B]),
-    (length(ML) =:= length(Res)).
+    (length(maps:keys(ML)) =:= length(Res)).
+
+model_check_registered_filters(#{mails := ML}, Res) ->
+    RF = [L || {_, L} <- Res, L =/= [] ],
+    MF = [L || L <- maps:values(ML), L =/= []],
+    (lists:flatlength(RF) =:= lists:flatlength(MF)).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Calls to mailfilter server
@@ -199,12 +225,13 @@ add_filter_to(MR, Label, Filt, Data) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%  Initial state
 %%  mail_serv : pid     mailfilter server id
-%%  mails : [pid]       list of mail analysis server ids
+%%  mails : #{pid := [filter_label()]}   pid - mail analysis server id which 
+%%                                  stores the list of filters registered to it
 %%  filters: #{filter_label() := {filter(), any_data()}} map of default filters 
 %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 initial_state() ->
-    #{mail_serv => none, mails => [], filters => #{}}.
+    #{mail_serv => none, mails => #{}, filters => #{}}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Commands
@@ -223,12 +250,12 @@ command(#{mails := ML, mail_serv := A}) ->
     oneof([
             {call, ?MODULE, add_mail_to, [A, mail()]},
             {call, ?MODULE, add_default_filter_to, 
-                [A, filter_label(), wellbehaved_filter(), any_data()]}
-            ]++ 
-            % {call, ?MODULE, add_filter_to, [get_mail_analysis(ML), filter_label(),
-            %      wellbehaved_filter(), any_data()]},
+                [A, filter_label(), wellbehaved_filter(), any_data()]}] ++
+            
+            [{call, ?MODULE, add_filter_to, [get_mail_analysis(maps:keys(ML)), filter_label(),
+                 wellbehaved_filter(), any_data()]} || maps:keys(ML) =/= [] ]++ 
             % {call, ?MODULE, get_mail_config, [get_mail_analysis(ML)]},
-            [{call, ?MODULE, stop_mail_analysis, [get_mail_analysis(ML)]} || ML =/= [] 
+            [{call, ?MODULE, stop_mail_analysis, [get_mail_analysis(maps:keys(ML))]} || maps:keys(ML) =/= [] 
         ]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -237,8 +264,8 @@ command(#{mails := ML, mail_serv := A}) ->
 next_state(S, V, {call, _, start_mail_server, _}) ->
     S#{mail_serv := V};
 
-next_state(#{mails := ML}=S, V, {call, ?MODULE, add_mail_to, [_, _]}) ->
-    S#{mails := model_add_mail(V, ML)};
+next_state(#{mails := ML, filters := DF}=S, V, {call, ?MODULE, add_mail_to, [_, _]}) ->
+    S#{mails := model_add_mail(V, DF, ML)};
 
 next_state(#{mails := ML}=S, _, {call, ?MODULE, stop_mail_analysis, [M]}) ->
     S#{mails := model_stop_mail_analysis(M, ML)};
@@ -246,8 +273,10 @@ next_state(#{mails := ML}=S, _, {call, ?MODULE, stop_mail_analysis, [M]}) ->
 next_state(#{filters := DF}=S, _, 
         {call, ?MODULE, add_default_filter_to, [_, L, F, D]}) ->
     S#{filters := model_add_default_filter( L, F, D, DF)};
-% next_state(_S, _, {call, mailfilter, stop, [_A]}) ->
-%     #{mail_serv => none, mails => []};
+
+
+next_state(#{mails := ML}=S, _, {call, _, add_filter_to, [M, L, _, _]}) ->
+     S#{mails => model_add_filter_to_mail(M, L, ML)};
 
 next_state(S, _, _) ->
     S.
