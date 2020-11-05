@@ -74,10 +74,10 @@ handle_cast({add_filter, Label, Filt, Data}, #{mail := Mail, filterServers := Fi
                                 UpdatedState = State#{filterData := UpdatedFilters, filterServers := [FS|FilterServers]},
                                 % io:format("code_change ANALYSIS Add_FILTER_TIMELIMIT: ~p~n", [State]),
                                 {noreply, UpdatedState};
-                    _ ->  io:format("code_change ANALYSIS Add_FILTER_NONE: ~p~n", [State]),
+                    _ ->  %io:format("code_change ANALYSIS Add_FILTER_NONE: ~p~n", [State]),
                         {noreply, State}
                 end;
-        _ ->  io:format("code_change ANALYSIS NONE Add_FILTER: ~p~n", [State]),
+        _ ->  %io:format("code_change ANALYSIS NONE Add_FILTER: ~p~n", [State]),
                 {noreply, State}
 
     end;
@@ -121,7 +121,7 @@ handle_cast(_, State) ->
     {ok, State}.
 
 handle_info(Info, State) ->
-    io:format("Error: ~p~n",[Info]),
+    %io:format("Error: ~p~n",[Info]),
     {noreply, State}.
 
 terminate(_Reason, _State) ->

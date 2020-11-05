@@ -210,7 +210,7 @@ handle_cast(stop, #{groupFilterServers := GroupFilterServers}=State) ->
     {stop, normal, State#{groupFilterServers := []}}.
 
 handle_info(Info, State) ->
-    io:format("Error: ~p~n",[Info]),
+    % io:format("Error: ~p~n",[Info]),
     {noreply, State}.
 
 terminate(_Reason, _State) ->
